@@ -1,0 +1,306 @@
+openapi: 3.0.3
+info:
+  title: Cloud Deployments API
+  version: 1.0.0
+  description: >-
+    API demonstrativa para registrar e acompanhar deployments em ambientes de
+    desenvolvimento, staging e produção. Os dados são mantidos somente em
+    memória e reiniciam com a aplicação.
+servers:
+  - url: http://localhost:8080
+    description: Ambiente local
+  - url: https://SEU-WEBAPP.azurewebsites.net
+    description: Azure App Service após um deploy real
+tags:
+  - name: Service
+  - name: Deployments
+paths:
+  /:
+    get:
+      tags: [Service]
+      operationId: getServiceInfo
+      summary: Exibir metadados do serviço
+      responses:
+        '200':
+          description: Metadados e links úteis.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceInfo'
+  /healthz:
+    get:
+      tags: [Service]
+      operationId: getHealth
+      summary: Verificar a saúde da API
+      responses:
+        '200':
+          description: Serviço saudável.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/deployments:
+    get:
+      tags: [Deployments]
+      operationId: listDeployments
+      summary: Listar deployments
+      parameters:
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [development, staging, production]
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeploymentStatus'
+      responses:
+        '200':
+          description: Lista ordenada do registro mais recente para o mais antigo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Deployment'
+        '429':
+          description: Limite de requisições excedido.
+    post:
+      tags: [Deployments]
+      operationId: createDeployment
+      summary: Registrar um deployment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeploymentRequest'
+      responses:
+        '201':
+          description: Deployment registrado com status Queued.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        '400':
+          description: Corpo ou campos inválidos.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblemDetails'
+        '429':
+          description: Limite de requisições excedido.
+  /api/v1/deployments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/DeploymentId'
+    get:
+      tags: [Deployments]
+      operationId: getDeployment
+      summary: Consultar um deployment
+      responses:
+        '200':
+          description: Deployment encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        '404':
+          description: Deployment não encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: Limite de requisições excedido.
+    delete:
+      tags: [Deployments]
+      operationId: deleteDeployment
+      summary: Excluir um deployment
+      responses:
+        '204':
+          description: Deployment excluído.
+        '404':
+          description: Deployment não encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: Limite de requisições excedido.
+  /api/v1/deployments/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/DeploymentId'
+    patch:
+      tags: [Deployments]
+      operationId: updateDeploymentStatus
+      summary: Atualizar status e observações
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeploymentStatusRequest'
+      responses:
+        '200':
+          description: Deployment atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        '400':
+          description: Corpo ou campos inválidos.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblemDetails'
+        '404':
+          description: Deployment não encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: Limite de requisições excedido.
+components:
+  parameters:
+    DeploymentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    DeploymentStatus:
+      type: string
+      enum: [Queued, InProgress, Succeeded, Failed, RolledBack]
+    CreateDeploymentRequest:
+      type: object
+      additionalProperties: false
+      required: [application, environment, version]
+      properties:
+        application:
+          type: string
+          minLength: 2
+          maxLength: 80
+          example: payment-api
+        environment:
+          type: string
+          enum: [development, staging, production]
+        version:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: v1.4.0
+        notes:
+          type: string
+          nullable: true
+          maxLength: 300
+          example: Release criada pela pipeline principal.
+    UpdateDeploymentStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/DeploymentStatus'
+        notes:
+          type: string
+          nullable: true
+          maxLength: 300
+    Deployment:
+      type: object
+      required:
+        - id
+        - application
+        - environment
+        - version
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        application:
+          type: string
+        environment:
+          type: string
+        version:
+          type: string
+        status:
+          $ref: '#/components/schemas/DeploymentStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+    ServiceInfo:
+      type: object
+      required: [service, version, documentation, health]
+      properties:
+        service:
+          type: string
+          example: cloud-deploy-api
+        version:
+          type: string
+          example: 1.0.0
+        documentation:
+          type: string
+          example: /swagger
+        health:
+          type: string
+          example: /healthz
+    HealthResponse:
+      type: object
+      required: [status, service, checkedAt]
+      properties:
+        status:
+          type: string
+          example: healthy
+        service:
+          type: string
+          example: cloud-deploy-api
+        checkedAt:
+          type: string
+          format: date-time
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          type: integer
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          nullable: true
+    ValidationProblemDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string

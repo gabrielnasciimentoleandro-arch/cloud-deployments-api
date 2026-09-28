@@ -1,0 +1,53 @@
+@baseUrl = http://localhost:8080
+@deploymentId = COLE-O-ID-RETORNADO-PELO-POST
+
+### Informações do serviço
+GET {{baseUrl}}/
+
+### Saúde
+GET {{baseUrl}}/healthz
+
+### Documentação OpenAPI gerada
+GET {{baseUrl}}/swagger/v1/swagger.json
+
+### Listar todos
+GET {{baseUrl}}/api/v1/deployments
+
+### Filtrar por ambiente e status
+GET {{baseUrl}}/api/v1/deployments?environment=production&status=Succeeded
+
+### Registrar deployment
+POST {{baseUrl}}/api/v1/deployments
+Content-Type: application/json
+
+{
+  "application": "payment-api",
+  "environment": "production",
+  "version": "v1.4.0",
+  "notes": "Release criada pela pipeline principal"
+}
+
+### Consultar pelo ID
+GET {{baseUrl}}/api/v1/deployments/{{deploymentId}}
+
+### Atualizar status
+PATCH {{baseUrl}}/api/v1/deployments/{{deploymentId}}/status
+Content-Type: application/json
+
+{
+  "status": "Succeeded",
+  "notes": "Deploy concluído sem erros"
+}
+
+### Excluir registro
+DELETE {{baseUrl}}/api/v1/deployments/{{deploymentId}}
+
+### Exemplo inválido
+POST {{baseUrl}}/api/v1/deployments
+Content-Type: application/json
+
+{
+  "application": "!",
+  "environment": "qualquer",
+  "version": "versão inválida"
+}
