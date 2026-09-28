@@ -1,0 +1,32 @@
+# .NET
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# Editors and operating system
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+secrets.json
+
+# Packages and generated files
+*.zip
+*.tgz
+artifacts/

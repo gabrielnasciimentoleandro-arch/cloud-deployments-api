@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/TestResults/
+.git/
+.github/
+.vscode/
+docs/
+infra/
+scripts/
+tests/
+*.md
+*.zip
+.env*
+!src/CloudDeploy.Api/appsettings*.json
