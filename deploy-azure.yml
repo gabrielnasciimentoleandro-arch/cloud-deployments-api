@@ -1,0 +1,84 @@
+name: Deploy to Azure
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-production
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: cloud-deploy-api
+
+jobs:
+  deploy:
+    name: Build, push and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate repository configuration
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          : "${ACR_NAME:?Configure the ACR_NAME repository variable}"
+          : "${ACR_LOGIN_SERVER:?Configure the ACR_LOGIN_SERVER repository variable}"
+          : "${WEBAPP_NAME:?Configure the AZURE_WEBAPP_NAME repository variable}"
+          : "${RESOURCE_GROUP:?Configure the AZURE_RESOURCE_GROUP repository variable}"
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign in to Azure Container Registry
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      - name: Build and push immutable image
+        env:
+          IMAGE: ${{ vars.ACR_LOGIN_SERVER }}/cloud-deploy-api:${{ github.sha }}
+        run: |
+          docker build --pull --tag "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Update Azure Web App container
+        env:
+          IMAGE: ${{ vars.ACR_LOGIN_SERVER }}/cloud-deploy-api:${{ github.sha }}
+        run: |
+          az webapp config container set \
+            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --container-image-name "$IMAGE"
+
+          az webapp config appsettings set \
+            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --settings WEBSITES_PORT=8080 Swagger__Enabled=true
+
+          az webapp restart \
+            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}"
+
+      - name: Verify health endpoint
+        run: >-
+          curl
+          --fail
+          --silent
+          --show-error
+          --retry 10
+          --retry-delay 15
+          --retry-all-errors
+          "https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/healthz"
